@@ -256,6 +256,8 @@ if [[ ${PROFILE} != *"enable-adaptive-scheduler"* ]]; then #FLINK-21450
 	run_test "Local recovery and sticky scheduling end-to-end test" "$END_TO_END_DIR/test-scripts/test_local_recovery_and_scheduling.sh 4 10 rocks true true" "skip_check_exceptions"
 fi
 
+run_test "AWS Glue Schema Registry nightly end-to-end test" "$END_TO_END_DIR/test-scripts/test_glue_schema_registry.sh"
+
 printf "\n[PASS] All bash e2e-tests passed\n"
 
 printf "\n\n==============================================================================\n"
