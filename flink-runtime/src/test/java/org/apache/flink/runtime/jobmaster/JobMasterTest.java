@@ -57,7 +57,6 @@ import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.concurrent.ComponentMainThreadExecutor;
 import org.apache.flink.runtime.deployment.ResultPartitionDeploymentDescriptor;
 import org.apache.flink.runtime.deployment.TaskDeploymentDescriptor;
-import org.apache.flink.runtime.dispatcher.SchedulerNGFactoryFactory;
 import org.apache.flink.runtime.execution.ExecutionState;
 import org.apache.flink.runtime.executiongraph.AccessExecution;
 import org.apache.flink.runtime.executiongraph.AccessExecutionVertex;
@@ -75,6 +74,7 @@ import org.apache.flink.runtime.io.network.partition.TestingJobMasterPartitionTr
 import org.apache.flink.runtime.jobgraph.DistributionPattern;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.JobGraph;
+import org.apache.flink.runtime.jobgraph.JobType;
 import org.apache.flink.runtime.jobgraph.JobVertex;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
@@ -91,6 +91,7 @@ import org.apache.flink.runtime.jobmaster.slotpool.SlotInfoWithUtilization;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotPool;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotPoolService;
 import org.apache.flink.runtime.jobmaster.slotpool.SlotPoolServiceFactory;
+import org.apache.flink.runtime.jobmaster.slotpool.TestingSlotPoolServiceBuilder;
 import org.apache.flink.runtime.jobmaster.utils.JobMasterBuilder;
 import org.apache.flink.runtime.leaderretrieval.SettableLeaderRetrievalService;
 import org.apache.flink.runtime.messages.Acknowledge;
@@ -104,7 +105,8 @@ import org.apache.flink.runtime.rpc.RpcUtils;
 import org.apache.flink.runtime.rpc.TestingRpcService;
 import org.apache.flink.runtime.rpc.akka.AkkaRpcService;
 import org.apache.flink.runtime.rpc.akka.AkkaRpcServiceConfiguration;
-import org.apache.flink.runtime.scheduler.SchedulerNGFactory;
+import org.apache.flink.runtime.scheduler.DefaultSchedulerFactory;
+import org.apache.flink.runtime.scheduler.ExecutionGraphInfo;
 import org.apache.flink.runtime.scheduler.TestingSchedulerNG;
 import org.apache.flink.runtime.scheduler.TestingSchedulerNGFactory;
 import org.apache.flink.runtime.shuffle.NettyShuffleMaster;
@@ -126,6 +128,7 @@ import org.apache.flink.runtime.testtasks.NoOpInvokable;
 import org.apache.flink.runtime.testutils.CommonTestUtils;
 import org.apache.flink.runtime.util.TestingFatalErrorHandler;
 import org.apache.flink.testutils.ClassLoaderUtils;
+import org.apache.flink.testutils.junit.FailsWithAdaptiveScheduler;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.FlinkException;
 import org.apache.flink.util.FlinkRuntimeException;
@@ -140,6 +143,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
 
 import javax.annotation.Nonnull;
@@ -291,9 +295,6 @@ public class JobMasterTest extends TestLogger {
             final JobMasterConfiguration jobMasterConfiguration =
                     JobMasterConfiguration.fromConfiguration(configuration);
 
-            final SchedulerNGFactory schedulerNGFactory =
-                    SchedulerNGFactoryFactory.createSchedulerNGFactory(configuration);
-
             final JobMaster jobMaster =
                     new JobMaster(
                             rpcService1,
@@ -302,14 +303,14 @@ public class JobMasterTest extends TestLogger {
                             jmResourceId,
                             jobGraph,
                             haServices,
-                            SlotPoolServiceFactory.fromConfiguration(configuration),
+                            DefaultSlotPoolServiceSchedulerFactory.fromConfiguration(
+                                    configuration, jobGraph.getJobType()),
                             jobManagerSharedServices,
                             heartbeatServices,
                             UnregisteredJobManagerJobMetricGroupFactory.INSTANCE,
                             new JobMasterBuilder.TestingOnCompletionActions(),
                             testingFatalErrorHandler,
                             JobMasterTest.class.getClassLoader(),
-                            schedulerNGFactory,
                             NettyShuffleMaster.INSTANCE,
                             NoOpJobMasterPartitionTracker.FACTORY,
                             new DefaultExecutionDeploymentTracker(),
@@ -469,7 +470,10 @@ public class JobMasterTest extends TestLogger {
         final JobMaster jobMaster =
                 new JobMasterBuilder(JobGraphTestUtils.createSingleVertexJobGraph(), rpcService)
                         .withHeartbeatServices(new HeartbeatServices(5L, 1000L))
-                        .withSlotPoolFactory(new TestingSlotPoolFactory(hasReceivedSlotOffers))
+                        .withSlotPoolServiceSchedulerFactory(
+                                DefaultSlotPoolServiceSchedulerFactory.create(
+                                        new TestingSlotPoolFactory(hasReceivedSlotOffers),
+                                        new DefaultSchedulerFactory()))
                         .createJobMaster();
 
         jobMaster.start();
@@ -761,6 +765,7 @@ public class JobMasterTest extends TestLogger {
      * submission.
      */
     @Test
+    @Category(FailsWithAdaptiveScheduler.class) // FLINK-21398
     public void testRestoringFromSavepoint() throws Exception {
 
         // create savepoint data
@@ -802,6 +807,7 @@ public class JobMasterTest extends TestLogger {
      * allowed.
      */
     @Test
+    @Category(FailsWithAdaptiveScheduler.class) // FLINK-21398
     public void testRestoringModifiedJobFromSavepoint() throws Exception {
 
         // create savepoint data
@@ -859,6 +865,7 @@ public class JobMasterTest extends TestLogger {
 
     /** Tests that an existing checkpoint will have precedence over an savepoint. */
     @Test
+    @Category(FailsWithAdaptiveScheduler.class) // FLINK-21398
     public void testCheckpointPrecedesSavepointRecovery() throws Exception {
 
         // create savepoint data
@@ -1044,6 +1051,7 @@ public class JobMasterTest extends TestLogger {
      * if this execution fails.
      */
     @Test
+    @Category(FailsWithAdaptiveScheduler.class) // FLINK-21450
     public void testRequestNextInputSplitWithLocalFailover() throws Exception {
 
         configuration.setString(
@@ -1091,6 +1099,7 @@ public class JobMasterTest extends TestLogger {
         source.setInvokableClass(AbstractInvokable.class);
 
         final JobGraph inputSplitJobGraph = new JobGraph(source);
+        inputSplitJobGraph.setJobType(JobType.STREAMING);
 
         final ExecutionConfig executionConfig = new ExecutionConfig();
         executionConfig.setRestartStrategy(RestartStrategies.fixedDelayRestart(100, 0));
@@ -1108,6 +1117,10 @@ public class JobMasterTest extends TestLogger {
         try {
             final JobMasterGateway jobMasterGateway =
                     jobMaster.getSelfGateway(JobMasterGateway.class);
+
+            registerSlotsRequiredForJobExecution(jobMasterGateway, parallelism);
+
+            waitUntilAllExecutionsAreScheduledOrDeployed(jobMasterGateway);
 
             final JobVertexID sourceId = source.getID();
 
@@ -1129,19 +1142,14 @@ public class JobMasterTest extends TestLogger {
                     allRequestedInputSplits,
                     containsInAnyOrder(allInputSplits.toArray(EMPTY_TESTING_INPUT_SPLITS)));
 
-            waitUntilAllExecutionsAreScheduled(jobMasterGateway);
-
             // fail the first execution to trigger a failover
             jobMasterGateway
                     .updateTaskExecutionState(
-                            new TaskExecutionState(
-                                    inputSplitJobGraph.getJobID(),
-                                    initialAttemptId,
-                                    ExecutionState.FAILED))
+                            new TaskExecutionState(initialAttemptId, ExecutionState.FAILED))
                     .get();
 
             // wait until the job has been recovered
-            waitUntilAllExecutionsAreScheduled(jobMasterGateway);
+            waitUntilAllExecutionsAreScheduledOrDeployed(jobMasterGateway);
 
             final ExecutionAttemptID restartedAttemptId =
                     getFirstExecution(jobMasterGateway, sourceId).getAttemptId();
@@ -1174,8 +1182,8 @@ public class JobMasterTest extends TestLogger {
         return () -> getInputSplit(jobMasterGateway, jobVertexID, initialAttemptId);
     }
 
-    private void waitUntilAllExecutionsAreScheduled(final JobMasterGateway jobMasterGateway)
-            throws Exception {
+    private void waitUntilAllExecutionsAreScheduledOrDeployed(
+            final JobMasterGateway jobMasterGateway) throws Exception {
         final Duration duration = Duration.ofMillis(testingTimeout.toMilliseconds());
         final Deadline deadline = Deadline.fromNow(duration);
 
@@ -1184,7 +1192,9 @@ public class JobMasterTest extends TestLogger {
                         getExecutions(jobMasterGateway).stream()
                                 .allMatch(
                                         execution ->
-                                                execution.getState() == ExecutionState.SCHEDULED),
+                                                execution.getState() == ExecutionState.SCHEDULED
+                                                        || execution.getState()
+                                                                == ExecutionState.DEPLOYING),
                 deadline);
     }
 
@@ -1199,7 +1209,7 @@ public class JobMasterTest extends TestLogger {
     private static Collection<AccessExecution> getExecutions(
             final JobMasterGateway jobMasterGateway) {
         final ArchivedExecutionGraph archivedExecutionGraph =
-                requestExecutionGraph(jobMasterGateway);
+                requestExecutionGraph(jobMasterGateway).getArchivedExecutionGraph();
 
         return archivedExecutionGraph.getAllVertices().values().stream()
                 .flatMap(vertex -> Arrays.stream(vertex.getTaskVertices()))
@@ -1210,7 +1220,7 @@ public class JobMasterTest extends TestLogger {
     private static List<AccessExecution> getExecutions(
             final JobMasterGateway jobMasterGateway, final JobVertexID jobVertexId) {
         final ArchivedExecutionGraph archivedExecutionGraph =
-                requestExecutionGraph(jobMasterGateway);
+                requestExecutionGraph(jobMasterGateway).getArchivedExecutionGraph();
 
         return Optional.ofNullable(archivedExecutionGraph.getAllVertices().get(jobVertexId))
                 .map(
@@ -1221,7 +1231,7 @@ public class JobMasterTest extends TestLogger {
                 .collect(Collectors.toList());
     }
 
-    private static ArchivedExecutionGraph requestExecutionGraph(
+    private static ExecutionGraphInfo requestExecutionGraph(
             final JobMasterGateway jobMasterGateway) {
         try {
             return jobMasterGateway.requestJob(testingTimeout).get();
@@ -1394,10 +1404,7 @@ public class JobMasterTest extends TestLogger {
             // finish the producer task
             jobMasterGateway
                     .updateTaskExecutionState(
-                            new TaskExecutionState(
-                                    producerConsumerJobGraph.getJobID(),
-                                    executionAttemptId,
-                                    ExecutionState.FINISHED))
+                            new TaskExecutionState(executionAttemptId, ExecutionState.FINISHED))
                     .get();
 
             // request the state of the result partition of the producer
@@ -1479,7 +1486,10 @@ public class JobMasterTest extends TestLogger {
         final JobMaster jobMaster =
                 new JobMasterBuilder(jobGraph, rpcService)
                         .withFatalErrorHandler(testingFatalErrorHandler)
-                        .withSchedulerFactory(new TestingSchedulerNGFactory(testingSchedulerNG))
+                        .withSlotPoolServiceSchedulerFactory(
+                                DefaultSlotPoolServiceSchedulerFactory.create(
+                                        TestingSlotPoolServiceBuilder.newBuilder(),
+                                        new TestingSchedulerNGFactory(testingSchedulerNG)))
                         .createJobMaster();
 
         try {
@@ -1809,16 +1819,16 @@ public class JobMasterTest extends TestLogger {
 
             jobMasterGateway
                     .updateTaskExecutionState(
-                            new TaskExecutionState(
-                                    jobGraph.getJobID(),
-                                    executionAttemptId,
-                                    ExecutionState.RUNNING))
+                            new TaskExecutionState(executionAttemptId, ExecutionState.RUNNING))
                     .get();
 
             jobReachedRunningState.accept(taskManagerUnresolvedLocation, jobMasterGateway);
 
             final ArchivedExecutionGraph archivedExecutionGraph =
-                    onCompletionActions.getJobReachedGloballyTerminalStateFuture().get();
+                    onCompletionActions
+                            .getJobReachedGloballyTerminalStateFuture()
+                            .get()
+                            .getArchivedExecutionGraph();
 
             assertThat(archivedExecutionGraph.getState(), is(JobStatus.FAILED));
         } finally {
@@ -1919,6 +1929,7 @@ public class JobMasterTest extends TestLogger {
     private JobGraph createJobGraphFromJobVerticesWithCheckpointing(
             SavepointRestoreSettings savepointRestoreSettings, JobVertex... jobVertices) {
         final JobGraph jobGraph = new JobGraph(jobVertices);
+        jobGraph.setJobType(JobType.STREAMING);
 
         // enable checkpointing which is required to resume from a savepoint
         final CheckpointCoordinatorConfiguration checkpoinCoordinatorConfiguration =
@@ -1968,5 +1979,12 @@ public class JobMasterTest extends TestLogger {
 
         @Override
         public void disposeStorageLocation() throws IOException {}
+    }
+
+    private static void registerSlotsRequiredForJobExecution(
+            JobMasterGateway jobMasterGateway, int numSlots)
+            throws ExecutionException, InterruptedException {
+        JobMasterTestUtils.registerTaskExecutorAndOfferSlots(
+                rpcService, jobMasterGateway, numSlots, testingTimeout);
     }
 }

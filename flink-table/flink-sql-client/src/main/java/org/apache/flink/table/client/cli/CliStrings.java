@@ -33,7 +33,6 @@ public final class CliStrings {
 
     public static final String CLI_NAME = "Flink SQL CLI Client";
     public static final String DEFAULT_MARGIN = " ";
-    public static final String NULL_COLUMN = "(NULL)";
 
     // --------------------------------------------------------------------------------------------
 
@@ -104,6 +103,15 @@ public final class CliStrings {
                             formatCommand(
                                     SqlCommand.USE,
                                     "Sets the current default database. Experimental! Syntax: 'USE <name>;'"))
+                    .append(
+                            formatCommand(
+                                    SqlCommand.LOAD_MODULE,
+                                    "Load a module. Syntax: 'LOAD MODULE <name> [WITH ('<key1>' = "
+                                            + "'<value1>' [, '<key2>' = '<value2>', ...])];'"))
+                    .append(
+                            formatCommand(
+                                    SqlCommand.UNLOAD_MODULE,
+                                    "Unload a module. Syntax: 'UNLOAD MODULE <name>;'"))
                     .style(AttributedStyle.DEFAULT.underline())
                     .append("\nHint")
                     .style(AttributedStyle.DEFAULT)
@@ -219,6 +227,14 @@ public final class CliStrings {
     public static final String MESSAGE_CATALOG_CREATED = "Catalog has been created.";
 
     public static final String MESSAGE_CATALOG_REMOVED = "Catalog has been removed.";
+
+    public static final String MESSAGE_LOAD_MODULE_SUCCEEDED = "Load module succeeded!";
+
+    public static final String MESSAGE_UNLOAD_MODULE_SUCCEEDED = "Unload module succeeded!";
+
+    public static final String MESSAGE_LOAD_MODULE_FAILED = "Load module failed!";
+
+    public static final String MESSAGE_UNLOAD_MODULE_FAILED = "Unload module failed!";
 
     // --------------------------------------------------------------------------------------------
 

@@ -17,6 +17,12 @@
 # limitations under the License.
 ################################################################################
 
+################################################################################
+# To run this test locally, AWS credential is required.
+# And IAM permission of AWSGlueSchemaRegistryReadonlyAccess,
+# AWSGlueSchemaRegistryFullAccess, and AWSGlueSchemaRegistryTagsFullAccess
+# needs to be added.
+################################################################################
 source "$(dirname "$0")"/common.sh
 
 echo "Running streaming kinesis with glue schema registry "
@@ -25,8 +31,8 @@ echo "Running streaming kinesis with glue schema registry "
 export AWS_CBOR_DISABLE=1
 
 # Required by the KPL native process
-export AWS_ACCESS_KEY_ID=flinkKinesisTestFakeAccessKeyId
-export AWS_SECRET_KEY=flinkKinesisTestFakeAccessKey
+export AWS_ACCESS_KEY_ID=$IT_CASE_GLUE_SCHEMA_ACCESS_KEY
+export AWS_SECRET_KEY=$IT_CASE_GLUE_SCHEMA_SECRET_KEY
 
 KINESALITE_PORT=4567
 
@@ -67,6 +73,6 @@ TEST_JAR="${END_TO_END_DIR}/flink-glue-schema-registry-test/target/GlueSchemaReg
 JVM_ARGS=${DISABLE_CERT_CHECKING_JAVA_OPTS} \
 $FLINK_DIR/bin/flink run -p 1 -c org.apache.flink.glue.schema.registry.test.GlueSchemaRegistryExampleTest $TEST_JAR \
   --input-stream gsr-input-stream --output-stream gsr-output-stream \
-  --aws.endpoint https://localhost:${KINESALITE_PORT} --aws.credentials.provider.basic. secretkeyfakekey --aws.credentials.provider.basic.accesskeyid fakeid \
+  --aws.endpoint https://localhost:${KINESALITE_PORT} --aws.credentials.provider.basic.secretkey fakekey --aws.credentials.provider.basic.accesskeyid fakeid \
   --flink.stream.initpos TRIM_HORIZON \
   --flink.partition-discovery.interval-millis 1000

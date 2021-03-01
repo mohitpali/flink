@@ -20,8 +20,6 @@ package org.apache.flink.formats.avro.glue.schema.registry;
 
 import org.apache.flink.formats.avro.SchemaCoder;
 
-import javax.annotation.Nonnull;
-
 import java.util.Map;
 
 /** Provider for {@link GlueSchemaRegistryAvroSchemaCoder}. */
@@ -37,12 +35,12 @@ public class GlueSchemaRegistryAvroSchemaCoderProvider implements SchemaCoder.Sc
      * @param configs configurations for AWS Glue Schema Registry
      */
     public GlueSchemaRegistryAvroSchemaCoderProvider(
-            String transportName, @Nonnull Map<String, Object> configs) {
+            String transportName, Map<String, Object> configs) {
         this.transportName = transportName;
         this.configs = configs;
     }
 
-    public GlueSchemaRegistryAvroSchemaCoderProvider(@Nonnull Map<String, Object> configs) {
+    public GlueSchemaRegistryAvroSchemaCoderProvider(Map<String, Object> configs) {
         this(null, configs);
     }
 

@@ -37,7 +37,7 @@ import java.util.Map;
  */
 public class GlueSchemaRegistryInputStreamDeserializer {
     private final AWSDeserializer awsDeserializer;
-    private final Parser schemaParser = new Schema.Parser();
+    // private final Parser schemaParser = new Schema.Parser();
 
     /**
      * Constructor accepts configuration map for AWS Deserializer.
@@ -75,6 +75,7 @@ public class GlueSchemaRegistryInputStreamDeserializer {
 
         Schema schema;
         try {
+            Parser schemaParser = new Schema.Parser();
             schema = schemaParser.parse(schemaDefinition);
         } catch (SchemaParseException e) {
             String message =

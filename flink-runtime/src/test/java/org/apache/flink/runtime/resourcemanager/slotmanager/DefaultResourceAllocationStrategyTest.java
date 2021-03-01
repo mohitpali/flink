@@ -22,8 +22,8 @@ import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.runtime.clusterframework.types.ResourceProfile;
 import org.apache.flink.runtime.instance.InstanceID;
-import org.apache.flink.runtime.slots.ResourceCounter;
 import org.apache.flink.runtime.slots.ResourceRequirement;
+import org.apache.flink.runtime.util.ResourceCounter;
 import org.apache.flink.util.TestLogger;
 
 import org.junit.Test;
@@ -88,14 +88,11 @@ public class DefaultResourceAllocationStrategyTest extends TestLogger {
         final JobID jobId = new JobID();
         final List<ResourceRequirement> requirements = new ArrayList<>();
         final ResourceProfile largeResource = DEFAULT_SLOT_RESOURCE.multiply(3);
-        final PendingTaskManagerId pendingTaskManagerId = PendingTaskManagerId.generate();
+        final PendingTaskManager pendingTaskManager =
+                new PendingTaskManager(DEFAULT_SLOT_RESOURCE.multiply(NUM_OF_SLOTS), NUM_OF_SLOTS);
         requirements.add(ResourceRequirement.create(largeResource, 1));
         requirements.add(ResourceRequirement.create(ResourceProfile.UNKNOWN, 7));
-        pendingTaskManagers.add(
-                new PendingTaskManager(
-                        pendingTaskManagerId,
-                        DEFAULT_SLOT_RESOURCE.multiply(NUM_OF_SLOTS),
-                        DEFAULT_SLOT_RESOURCE));
+        pendingTaskManagers.add(pendingTaskManager);
 
         final ResourceAllocationResult result =
                 STRATEGY.tryFulfillRequirements(
@@ -107,17 +104,25 @@ public class DefaultResourceAllocationStrategyTest extends TestLogger {
         assertThat(result.getPendingTaskManagersToAllocate().size(), is(1));
         final PendingTaskManagerId newAllocated =
                 result.getPendingTaskManagersToAllocate().get(0).getPendingTaskManagerId();
-        final ResourceCounter allFulfilledRequirements = new ResourceCounter();
-        result.getAllocationsOnPendingResources()
-                .get(pendingTaskManagerId)
-                .get(jobId)
-                .getResourceProfilesWithCount()
-                .forEach(allFulfilledRequirements::incrementCount);
-        result.getAllocationsOnPendingResources()
-                .get(newAllocated)
-                .get(jobId)
-                .getResourceProfilesWithCount()
-                .forEach(allFulfilledRequirements::incrementCount);
+        ResourceCounter allFulfilledRequirements = ResourceCounter.empty();
+        for (Map.Entry<ResourceProfile, Integer> resourceWithCount :
+                result.getAllocationsOnPendingResources()
+                        .get(pendingTaskManager.getPendingTaskManagerId())
+                        .get(jobId)
+                        .getResourcesWithCount()) {
+            allFulfilledRequirements =
+                    allFulfilledRequirements.add(
+                            resourceWithCount.getKey(), resourceWithCount.getValue());
+        }
+        for (Map.Entry<ResourceProfile, Integer> resourceWithCount :
+                result.getAllocationsOnPendingResources()
+                        .get(newAllocated)
+                        .get(jobId)
+                        .getResourcesWithCount()) {
+            allFulfilledRequirements =
+                    allFulfilledRequirements.add(
+                            resourceWithCount.getKey(), resourceWithCount.getValue());
+        }
 
         assertThat(allFulfilledRequirements.getResourceCount(DEFAULT_SLOT_RESOURCE), is(7));
         assertThat(allFulfilledRequirements.getResourceCount(largeResource), is(1));
